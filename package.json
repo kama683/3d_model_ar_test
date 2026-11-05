@@ -1,0 +1,34 @@
+{
+  "name": "ar-filter",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "test:e2e": "node tests/e2e.mjs",
+    "optimize-model": "node scripts/optimize-model.mjs PostBox.glb public/models/model.glb 2048"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.114.0",
+    "@react-three/fiber": "^8.17.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.1.0",
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "playwright": "^1.48.2",
+    "sharp": "^0.34.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
