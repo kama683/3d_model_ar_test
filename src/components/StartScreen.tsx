@@ -3,10 +3,13 @@ import type { CameraStatus } from '../hooks/useCamera';
 interface StartScreenProps {
   status: CameraStatus;
   error: string | null;
+  /** WebXR immersive-ar поддерживается (Android Chrome + ARCore). */
+  xrSupported: boolean;
   onStart: () => void;
+  onStartXr: () => void;
 }
 
-export function StartScreen({ status, error, onStart }: StartScreenProps) {
+export function StartScreen({ status, error, xrSupported, onStart, onStartXr }: StartScreenProps) {
   const starting = status === 'starting';
   const failed = status === 'error';
 
@@ -24,12 +27,26 @@ export function StartScreen({ status, error, onStart }: StartScreenProps) {
           <p className="start-error" role="alert">{error}</p>
         ) : (
           <p className="start-text">
-            3D-модель поверх изображения с камеры. Двигайте её кнопками или пальцами.
+            {xrSupported
+              ? 'Ваше устройство поддерживает AR: модель можно поставить на пол, и она останется на месте.'
+              : '3D-модель поверх изображения с камеры. Двигайте её кнопками или пальцами.'}
           </p>
         )}
-        <button className="btn-primary" onClick={onStart} disabled={starting} data-testid="start-camera">
-          {starting ? 'Запуск камеры…' : failed ? 'Повторить' : 'Включить камеру'}
-        </button>
+
+        {xrSupported ? (
+          <>
+            <button className="btn-primary" onClick={onStartXr} disabled={starting} data-testid="start-xr">
+              Запустить AR
+            </button>
+            <button className="btn-link" onClick={onStart} disabled={starting} data-testid="start-camera">
+              {starting ? 'Запуск камеры…' : 'Без AR: камера + гироскоп'}
+            </button>
+          </>
+        ) : (
+          <button className="btn-primary" onClick={onStart} disabled={starting} data-testid="start-camera">
+            {starting ? 'Запуск камеры…' : failed ? 'Повторить' : 'Включить камеру'}
+          </button>
+        )}
       </div>
     </div>
   );

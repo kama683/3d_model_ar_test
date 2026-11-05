@@ -18,6 +18,10 @@ interface ControlPanelProps {
   onTogglePaused: () => void;
   dance: boolean;
   onToggleDance: () => void;
+  /** Кнопка размещения в мире: «Поставить модель» / «Центрировать» / «Переставить». */
+  anchorAction?: { label: string; onClick: () => void; primary?: boolean } | null;
+  /** Мелкая подсказка над кнопками. */
+  note?: string | null;
 }
 
 /**
@@ -136,6 +140,22 @@ export function ControlPanel(props: ControlPanelProps) {
       >
         <span className="panel-handle-bar" />
       </button>
+
+      {(props.anchorAction || props.note) && (
+        <div className="anchor-row">
+          {props.anchorAction && (
+            <button
+              type="button"
+              className={`anchor-btn${props.anchorAction.primary ? ' is-primary' : ''}`}
+              onClick={props.anchorAction.onClick}
+              data-testid="anchor-action"
+            >
+              {props.anchorAction.label}
+            </button>
+          )}
+          {props.note && <p className="anchor-note" data-testid="anchor-note">{props.note}</p>}
+        </div>
+      )}
 
       {!collapsed && (
         <div className="panel-body">

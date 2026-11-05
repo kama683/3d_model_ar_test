@@ -1,5 +1,14 @@
 import { useEffect } from 'react';
-import { CAMERA_FOV, CAMERA_Z } from '../config';
+import {
+  CAMERA_FOV,
+  CAMERA_Z,
+  GYRO_DISTANCE,
+  GYRO_MODEL_HEIGHT,
+  MODEL_TARGET_HEIGHT,
+  XR_DRAG_METERS_PER_PIXEL,
+  XR_MODEL_HEIGHT,
+} from '../config';
+import type { ArMode } from '../components/ModelScene';
 import type { ModelController } from '../model/ModelController';
 
 interface Point {
@@ -17,6 +26,7 @@ export function useGestures(
   element: React.RefObject<HTMLElement>,
   controller: ModelController,
   enabled: boolean,
+  mode: ArMode,
 ): void {
   useEffect(() => {
     const el = element.current;
@@ -26,11 +36,18 @@ export function useGestures(
     let lastSingle: Point | null = null;
     let lastPair: { mid: Point; dist: number; angle: number } | null = null;
 
-    /** Сколько мировых единиц в одном CSS-пикселе на глубине модели. */
+    /**
+     * Сколько единиц контроллера в одном CSS-пикселе. Контроллер работает в единицах режима «на экране»,
+     * а Rig масштабирует их под высоту модели текущего режима (unit).
+     */
     const worldPerPixel = (): number => {
-      const depth = Math.max(0.5, CAMERA_Z - controller.current.z);
-      const visible = 2 * depth * Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180);
-      return visible / Math.max(1, el.clientHeight);
+      if (mode === 'xr') return XR_DRAG_METERS_PER_PIXEL / (XR_MODEL_HEIGHT / MODEL_TARGET_HEIGHT);
+      const unit = mode === 'gyro' ? GYRO_MODEL_HEIGHT / MODEL_TARGET_HEIGHT : 1;
+      const baseDepth = mode === 'gyro' ? GYRO_DISTANCE : CAMERA_Z;
+      const fov = mode === 'gyro' ? 60 : CAMERA_FOV;
+      const depth = Math.max(0.3, baseDepth - controller.current.z * unit);
+      const visible = 2 * depth * Math.tan(((fov / 2) * Math.PI) / 180);
+      return visible / Math.max(1, el.clientHeight) / unit;
     };
 
     const pairInfo = () => {
@@ -62,7 +79,11 @@ export function useGestures(
 
       if (pointers.size === 1 && lastSingle) {
         const p = pointers.get(e.pointerId)!;
-        controller.translate((p.x - lastSingle.x) * k, -(p.y - lastSingle.y) * k);
+        const dx = (p.x - lastSingle.x) * k;
+        const dy = (p.y - lastSingle.y) * k;
+        // В AR модель стоит на полу: вертикальный свайп двигает ближе/дальше, а не вверх.
+        if (mode === 'xr') controller.translate(dx, 0, dy);
+        else controller.translate(dx, -dy);
         lastSingle = { ...p };
       } else if (pointers.size >= 2 && lastPair) {
         const now = pairInfo();
@@ -71,7 +92,9 @@ export function useGestures(
         if (dAngle > Math.PI) dAngle -= Math.PI * 2;
         if (dAngle < -Math.PI) dAngle += Math.PI * 2;
         controller.rotateBy(dAngle);
-        controller.translate((now.mid.x - lastPair.mid.x) * k, -(now.mid.y - lastPair.mid.y) * k);
+        if (mode !== 'xr') {
+          controller.translate((now.mid.x - lastPair.mid.x) * k, -(now.mid.y - lastPair.mid.y) * k);
+        }
         lastPair = now;
       }
     };
@@ -105,5 +128,5 @@ export function useGestures(
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('contextmenu', preventDefault);
     };
-  }, [element, controller, enabled]);
+  }, [element, controller, enabled, mode]);
 }

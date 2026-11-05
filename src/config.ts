@@ -23,6 +23,28 @@ export const MODEL_TARGET_HEIGHT = VISIBLE_HEIGHT * MODEL_SCREEN_FRACTION;
 export const MODEL_CENTER_OFFSET = 0.08 * VISIBLE_HEIGHT;
 export const MODEL_BASE_Y = -MODEL_TARGET_HEIGHT / 2 + MODEL_CENTER_OFFSET;
 
+/* ---------- Привязка к миру ---------- */
+
+/** Гироскоп-режим: на каком расстоянии (м) перед камерой ставится модель. */
+export const GYRO_DISTANCE = 2;
+/** Гироскоп-режим: высота модели, чтобы на 2 м она занимала ~40% экрана. */
+export const GYRO_MODEL_HEIGHT =
+  2 * GYRO_DISTANCE * Math.tan(((60 / 2) * Math.PI) / 180) * MODEL_SCREEN_FRACTION;
+/**
+ * Примерный угол обзора задней камеры телефона по длинной стороне кадра (градусы).
+ * Из него считаем FOV камеры three.js, чтобы модель «не плавала» при поворотах.
+ */
+export const REAR_CAMERA_FOV_LONG_SIDE = 64;
+/** Сглаживание поворота камеры по датчикам (больше: быстрее, но дрожит). */
+export const GYRO_SMOOTHING = 14;
+/** Сколько ждать первых данных датчика, мс. */
+export const ORIENTATION_TIMEOUT_MS = 1500;
+
+/** WebXR: высота модели в реальном мире, м. */
+export const XR_MODEL_HEIGHT = 0.6;
+/** WebXR и гироскоп: сколько метров в одном пикселе при перетаскивании пальцем (XR). */
+export const XR_DRAG_METERS_PER_PIXEL = 0.003;
+
 /** Ограничения трансформаций */
 export const SCALE_MIN = 0.25;
 export const SCALE_MAX = 4;

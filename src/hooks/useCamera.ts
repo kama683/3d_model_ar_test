@@ -11,7 +11,7 @@ export interface CameraState {
   /** true, если видео нужно зеркалить (фронтальная камера) */
   mirrored: boolean;
   cameraCount: number;
-  start: () => Promise<void>;
+  start: (wanted?: FacingMode) => Promise<void>;
   switchCamera: () => Promise<boolean>;
   stop: () => void;
 }
@@ -105,6 +105,7 @@ export function useCamera(): CameraState {
     stopStream(streamRef.current);
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setStatus('idle');
   }, []);
 
   const startWith = useCallback(
@@ -127,11 +128,12 @@ export function useCamera(): CameraState {
     [attach],
   );
 
-  const start = useCallback(async () => {
+  /** @param wanted какую камеру открыть (по умолчанию текущую; в гироскоп-режиме: заднюю) */
+  const start = useCallback(async (wanted?: FacingMode) => {
     setStatus('starting');
     setError(null);
     try {
-      await startWith(facing);
+      await startWith(wanted ?? facing);
       setStatus('active');
     } catch (err) {
       setStatus('error');

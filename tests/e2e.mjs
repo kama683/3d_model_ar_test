@@ -215,6 +215,131 @@ for (const [label, device] of [['iphone14', devices['iPhone 14']], ['pixel7', de
   await context.close();
 }
 
+// ---------- Гироскоп: синтетические события ориентации ----------
+{
+  const { defaultBrowserType: _i, ...pixel } = devices['Pixel 7'];
+  const context = await browser.newContext({ ...pixel, permissions: ['camera', 'accelerometer', 'gyroscope', 'magnetometer'] });
+  await context.addInitScript(() => {
+    // Телефон вертикально, смотрит вперёд: beta = 90.
+    window.__orient = { alpha: 0, beta: 90, gamma: 0 };
+    setInterval(() => {
+      const o = window.__orient;
+      for (const type of ['deviceorientationabsolute', 'deviceorientation']) {
+        window.dispatchEvent(new DeviceOrientationEvent(type, { ...o, absolute: true }));
+      }
+    }, 16);
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(e.message));
+  const setAlpha = (alpha) => page.evaluate((a) => { window.__orient.alpha = a; }, alpha);
+  const ndc = () => page.evaluate(() => window.__arModelNdc());
+
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.getByTestId('start-camera').click();
+  await page.waitForSelector('[data-testid="mode-badge"]', { timeout: 15000 });
+  await page.waitForSelector('.loading', { state: 'detached', timeout: 30000 }).catch(() => {});
+  await sleep(800);
+  const badge = await page.getByTestId('mode-badge').textContent();
+  check('[gyro] автоопределение: режим «Гироскоп»', badge === 'Гироскоп', badge);
+  const noteText = await page.getByTestId('anchor-note').textContent();
+  check('[gyro] предупреждение про ходьбу', noteText.includes('привязана к направлению'));
+  check('[gyro] кнопка «Поставить модель»', (await page.getByTestId('anchor-action').textContent()) === 'Поставить модель');
+  await page.screenshot({ path: `${OUT}/gyro-1-before-place.png` });
+
+  // До размещения модель «едет» за взглядом
+  await setAlpha(30);
+  await sleep(700);
+  const follow = await ndc();
+  check('[gyro] до размещения модель следует за взглядом', Math.abs(follow.x) < 0.05, `x=${follow.x.toFixed(3)}`);
+
+  await page.getByTestId('anchor-action').click();
+  await sleep(700);
+  check('[gyro] после размещения: кнопка «Центрировать»', (await page.getByTestId('anchor-action').textContent()) === 'Центрировать');
+  const placedAt = await ndc();
+
+  // Поворот телефона влево на 25°: модель уезжает вправо по экрану
+  await setAlpha(55);
+  await sleep(900);
+  const turned = await ndc();
+  await page.screenshot({ path: `${OUT}/gyro-2-turned-left.png` });
+  check('[gyro] поворот влево: модель смещается вправо', turned.x > 0.3, `x ${placedAt.x.toFixed(2)} → ${turned.x.toFixed(2)}`);
+
+  // Вернули телефон: модель снова там же
+  await setAlpha(30);
+  await sleep(900);
+  const back = await ndc();
+  check('[gyro] возврат: модель на прежнем месте', Math.abs(back.x - placedAt.x) < 0.03 && Math.abs(back.y - placedAt.y) < 0.03,
+    `x=${back.x.toFixed(3)} y=${back.y.toFixed(3)}`);
+
+  // Наклон вниз: модель поднимается по экрану (смотрим ниже неё)
+  await page.evaluate(() => { window.__orient.beta = 70; });
+  await sleep(900);
+  const tilted = await ndc();
+  check('[gyro] наклон вниз: модель смещается вверх', tilted.y > back.y + 0.2, `y ${back.y.toFixed(2)} → ${tilted.y.toFixed(2)}`);
+  await page.evaluate(() => { window.__orient.beta = 90; });
+
+  // «Центрировать» с другого направления
+  await setAlpha(-60);
+  await sleep(600);
+  await page.getByTestId('anchor-action').click();
+  await sleep(900);
+  const centered = await ndc();
+  await page.screenshot({ path: `${OUT}/gyro-3-centered.png` });
+  check('[gyro] «Центрировать» возвращает модель перед камерой', Math.abs(centered.x) < 0.05, `x=${centered.x.toFixed(3)}`);
+
+  // Кнопки работают и в мировом режиме
+  const t0 = await target(page);
+  await page.locator('[data-action="scaleUp"]').tap();
+  await page.locator('[data-action="rotateLeft"]').tap();
+  const t1 = await target(page);
+  check('[gyro] кнопки масштаба/поворота', t1.scale > t0.scale && t1.rotY < t0.rotY);
+  check('[gyro] нет ошибок в консоли', errors.length === 0, errors.join(' | '));
+  await context.close();
+}
+
+// ---------- iOS: отказ в доступе к датчикам -> режим «Экран» ----------
+{
+  const { defaultBrowserType: _i, ...iphone } = devices['iPhone 14'];
+  const context = await browser.newContext({ ...iphone, permissions: ['camera'] });
+  await context.addInitScript(() => {
+    DeviceOrientationEvent.requestPermission = () => Promise.resolve('denied');
+  });
+  const page = await context.newPage();
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.getByTestId('start-camera').click();
+  const toast = await page.waitForSelector('[data-testid="toast"]', { timeout: 15000 }).then((t) => t.textContent());
+  const badge = await page.getByTestId('mode-badge').textContent();
+  await page.screenshot({ path: `${OUT}/gyro-denied.png` });
+  check('[ios-denied] сообщение и откат на «Экран»', toast.includes('отклонён') && badge === 'Экран', `${badge}: ${toast}`);
+  await context.close();
+}
+
+// ---------- WebXR: поддержка обнаружена, но сессия не стартовала -> откат ----------
+{
+  const { defaultBrowserType: _i, ...pixel } = devices['Pixel 7'];
+  const context = await browser.newContext({ ...pixel, permissions: ['camera'] });
+  await context.addInitScript(() => {
+    // Настоящий XRSystem: EventTarget (три.js/drei подписываются на devicechange).
+    const fakeXr = Object.assign(new EventTarget(), {
+      isSessionSupported: (m) => Promise.resolve(m === 'immersive-ar'),
+      requestSession: () => Promise.reject(new DOMException('no ARCore', 'NotSupportedError')),
+    });
+    Object.defineProperty(Navigator.prototype, 'xr', { get: () => fakeXr, configurable: true });
+  });
+  const page = await context.newPage();
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.getByTestId('start-xr').waitFor({ timeout: 10000 });
+  await page.screenshot({ path: `${OUT}/xr-start-screen.png` });
+  check('[xr] при поддержке WebXR показана кнопка «Запустить AR»', true);
+  await page.getByTestId('start-xr').click();
+  const toast = await page.waitForSelector('[data-testid="toast"]', { timeout: 15000 }).then((t) => t.textContent());
+  await page.waitForSelector('[data-testid="mode-badge"]', { timeout: 15000 });
+  check('[xr] ошибка AR -> откат на обычный режим', toast.includes('AR не запустился'), toast);
+  await context.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

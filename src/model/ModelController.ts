@@ -61,9 +61,10 @@ export class ModelController {
   }
 
   /** Сдвиг в мировых единицах (жест перетаскивания). */
-  translate(dx: number, dy: number): void {
+  translate(dx: number, dy: number, dz = 0): void {
     this.target.x += dx;
     this.target.y += dy;
+    this.target.z += dz;
     this.clamp();
   }
 
